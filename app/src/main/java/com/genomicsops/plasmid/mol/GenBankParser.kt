@@ -21,12 +21,8 @@ data class Plasmid(
 
 object GenBankParser {
     private val featureColors = intArrayOf(
-        0xFF00E5FF.toInt(), // Cyan
-        0xFF00FFAA.toInt(), // Teal
-        0xFFFF0055.toInt(), // Pink
-        0xFFFFAA00.toInt(), // Orange
-        0xFFAA00FF.toInt(), // Purple
-        0xFF5555FF.toInt()  // Blue
+        0xFF00E5FF.toInt(), 0xFF00FFAA.toInt(), 0xFFFF0055.toInt(),
+        0xFFFFAA00.toInt(), 0xFFAA00FF.toInt(), 0xFF5555FF.toInt()
     )
 
     fun parse(inputStream: InputStream): Plasmid? {
@@ -37,12 +33,11 @@ object GenBankParser {
 
         var inFeatures = false
         var inOrigin = false
-        var currentFeatureStart = 0
-        var currentFeatureEnd = 0
+        
         var currentFeatureType = ""
-        var currentFeatureStrand = "+"
-        var currentFeatureName = ""
-        var currentFeatureColorIndex = 0
+        var currentLocation = ""
+        var currentName = ""
+        var currentColorIndex = 0
 
         for (line in lines) {
             if (line.startsWith("LOCUS")) {
@@ -53,45 +48,62 @@ object GenBankParser {
             } else if (line.startsWith("ORIGIN")) {
                 inFeatures = false
                 inOrigin = true
-            } else if (inFeatures && line.length > 21 && (line[5] != ' ' || line[20] != ' ')) {
-                // Parsing a new feature
-                if (currentFeatureType.isNotEmpty()) {
-                    features.add(Feature(currentFeatureName.ifEmpty { currentFeatureType }, currentFeatureType, currentFeatureStart, currentFeatureEnd, currentFeatureStrand, featureColors[currentFeatureColorIndex % featureColors.size]))
-                    currentFeatureColorIndex++
-                }
-                
-                val parts = line.trim().split("\\s+".toRegex())
-                if (parts.isNotEmpty()) {
-                    currentFeatureType = parts[0]
-                    val location = parts.getOrElse(1) { "" }
-                    
-                    val isComplement = location.contains("complement")
-                    currentFeatureStrand = if (isComplement) "-" else "+"
-                    
-                    val nums = location.filter { it.isDigit() || it == '.' }.split("..")
-                    if (nums.size >= 2) {
-                        currentFeatureStart = nums[0].toIntOrNull() ?: 0
-                        currentFeatureEnd = nums[1].toIntOrNull() ?: 0
+            } else if (inFeatures) {
+                // A new feature key starts at column 6 (index 5) and is not a space
+                if (line.length > 20 && line[5] != ' ') {
+                    if (currentFeatureType.isNotEmpty() && currentLocation.isNotEmpty()) {
+                        val (start, end, strand) = parseLocation(currentLocation)
+                        if (start > 0 && end >= start) {
+                            features.add(Feature(currentName.ifEmpty { currentFeatureType }, currentFeatureType, start, end, strand, featureColors[currentColorIndex % featureColors.size]))
+                            currentColorIndex++
+                        }
                     }
-                    currentFeatureName = ""
+                    val parts = line.trim().split("\\s+".toRegex(), limit = 2)
+                    currentFeatureType = parts[0]
+                    currentLocation = if (parts.size > 1) parts[1] else ""
+                    currentName = ""
+                } else if (line.length > 21 && line[5] == ' ') {
+                    val trimmed = line.trim()
+                    if (trimmed.startsWith("/gene=") || trimmed.startsWith("/label=")) {
+                        if (currentName.isEmpty()) currentName = trimmed.substringAfter("=").replace("\"", "")
+                    } else if (trimmed.startsWith("/product=") && currentName.isEmpty()) {
+                        currentName = trimmed.substringAfter("=").replace("\"", "")
+                    } else if (!trimmed.startsWith("/")) {
+                        // Continuation of location string (e.g. join spanning lines)
+                        currentLocation += trimmed
+                    }
                 }
-            } else if (inFeatures && line.trim().startsWith("/label=")) {
-                currentFeatureName = line.trim().removePrefix("/label=").replace("\"", "")
-            } else if (inFeatures && line.trim().startsWith("/gene=")) {
-                if (currentFeatureName.isEmpty()) currentFeatureName = line.trim().removePrefix("/gene=").replace("\"", "")
             } else if (inOrigin) {
                 val seq = line.filter { it.isLetter() }
                 sequenceBuilder.append(seq)
             }
         }
         
-        // Add the last feature
-        if (currentFeatureType.isNotEmpty()) {
-            features.add(Feature(currentFeatureName.ifEmpty { currentFeatureType }, currentFeatureType, currentFeatureStart, currentFeatureEnd, currentFeatureStrand, featureColors[currentFeatureColorIndex % featureColors.size]))
+        // Add the very last feature
+        if (currentFeatureType.isNotEmpty() && currentLocation.isNotEmpty()) {
+            val (start, end, strand) = parseLocation(currentLocation)
+            if (start > 0 && end >= start) {
+                features.add(Feature(currentName.ifEmpty { currentFeatureType }, currentFeatureType, start, end, strand, featureColors[currentColorIndex % featureColors.size]))
+            }
         }
 
         return if (sequenceBuilder.isNotEmpty()) {
             Plasmid(name, sequenceBuilder.toString().uppercase(), features)
         } else null
+    }
+
+    private fun parseLocation(loc: String): Triple<Int, Int, String> {
+        val isComplement = loc.contains("complement")
+        val strand = if (isComplement) "-" else "+"
+        
+        // Extract all numbers, ignoring non-digits and dots
+        val numbers = loc.filter { it.isDigit() || it == '.' }.split("..")
+        val validNums = numbers.mapNotNull { it.toIntOrNull() }
+        
+        return if (validNums.size >= 2) {
+            Triple(validNums.first(), validNums.last(), strand)
+        } else {
+            Triple(0, 0, strand)
+        }
     }
 }

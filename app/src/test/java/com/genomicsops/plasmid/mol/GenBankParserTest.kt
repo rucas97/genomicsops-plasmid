@@ -29,22 +29,22 @@ ORIGIN
         
         assertNotNull(plasmid)
         assertEquals("pUC19", plasmid?.name)
-        // Note: The dummy sequence above only has 120 bases for testing
         assertEquals(120, plasmid?.length) 
     }
 
     @Test
-    fun `parses features`() {
+    fun `parses features correctly`() {
         val inputStream = ByteArrayInputStream(dummyGenBank.toByteArray())
         val plasmid = GenBankParser.parse(inputStream)
         
         assertNotNull(plasmid)
+        // Should parse source, gene, and CDS
         assertEquals(3, plasmid?.features?.size)
         
-        val ampR = plasmid?.features?.find { it.name == "AmpR" }
-        assertNotNull(ampR)
-        assertEquals("CDS", ampR?.type)
-        assertEquals(162, ampR?.start)
-        assertEquals(1013, ampR?.end)
+        // Find the CDS feature specifically (both gene and CDS are named AmpR in the file)
+        val cdsFeature = plasmid?.features?.find { it.type == "CDS" && it.name == "AmpR" }
+        assertNotNull(cdsFeature)
+        assertEquals(162, cdsFeature?.start)
+        assertEquals(1013, cdsFeature?.end)
     }
 }
