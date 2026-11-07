@@ -16,9 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -81,6 +79,8 @@ fun PlasmidScreen() {
     var selectedFeature by remember { mutableStateOf<Feature?>(null) }
     var showBackbone by remember { mutableStateOf(false) }
     var colorTheme by remember { mutableStateOf("genomicsops") }
+    var showEnzymes by remember { mutableStateOf(true) } // NEW FEATURE
+    var searchQuery by remember { mutableStateOf("") }  // NEW FEATURE
     var isLoading by remember { mutableStateOf(false) }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -134,6 +134,10 @@ fun PlasmidScreen() {
                         Text("${p.length} bp • ${p.features.size} features", color = GenomicsMuted, fontSize = 12.sp)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        // NEW FEATURE: Toggle Enzymes
+                        IconButton(onClick = { showEnzymes = !showEnzymes }) {
+                            Icon(if (showEnzymes) Icons.Default.Visibility else Icons.Default.VisibilityOff, contentDescription = "Toggle Enzymes", tint = if (showEnzymes) Color.Red else GenomicsMuted)
+                        }
                         IconButton(onClick = { 
                             clipboardManager.setText(AnnotatedString(p.sequence))
                             Toast.makeText(context, "Full sequence copied!", Toast.LENGTH_SHORT).show()
@@ -156,6 +160,7 @@ fun PlasmidScreen() {
                     }
                 }
             }
+
             // 3D Map
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 PlasmidMap(
@@ -163,14 +168,15 @@ fun PlasmidScreen() {
                     selectedFeature = selectedFeature, 
                     onFeatureSelected = { selectedFeature = it }, 
                     onBackboneSelected = { showBackbone = it }, 
-                    colorTheme = colorTheme
+                    colorTheme = colorTheme,
+                    showEnzymes = showEnzymes
                 )
             }
 
             // Bottom Details / List Panel
             Surface(
                 color = GenomicsSurface,
-                modifier = Modifier.fillMaxWidth().height(220.dp),
+                modifier = Modifier.fillMaxWidth().height(250.dp),
                 shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
             ) {
                 if (showBackbone) {
@@ -198,7 +204,7 @@ fun PlasmidScreen() {
                         )
                         Spacer(Modifier.weight(1f))
                         TextButton(onClick = { showBackbone = false }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                            Text("Back to Feature List", color = GenomicsMuted)
+                            Text("Back to List", color = GenomicsMuted)
                         }
                     }
                 } else if (selectedFeature != null) {
@@ -234,20 +240,42 @@ fun PlasmidScreen() {
                         )
                     }
                 } else {
-                    // --- FEATURE LIST ---
-                    LazyColumn(contentPadding = PaddingValues(16.dp)) {
-                        items(p.features) { feature ->
-                            Row(
-                                Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { 
-                                    selectedFeature = feature 
-                                    showBackbone = false
-                                },
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Box(Modifier.size(12.dp).background(Color(feature.color), RoundedCornerShape(50)))
-                                Spacer(Modifier.width(12.dp))
-                                Text(feature.name, color = GenomicsText, modifier = Modifier.weight(1f))
-                                Text("${feature.start}..${feature.end}", color = GenomicsMuted, fontSize = 12.sp)
+                    // --- FEATURE LIST WITH SEARCH BAR ---
+                    Column(Modifier.fillMaxSize()) {
+                        // NEW FEATURE: Search Bar
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = { Text("Search features (e.g. Amp, EcoRI)", color = GenomicsMuted, fontSize = 12.sp) },
+                            modifier = Modifier.fillMaxWidth().padding(8.dp),
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = GenomicsCyan,
+                                unfocusedBorderColor = GenomicsMuted.copy(alpha = 0.5f),
+                                focusedTextColor = GenomicsText,
+                                unfocusedTextColor = GenomicsText
+                            )
+                        )
+                        
+                        LazyColumn(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)) {
+                            // Filter the list based on the search query
+                            val filteredFeatures = if (searchQuery.isBlank()) p.features else {
+                                p.features.filter { it.name.contains(searchQuery, ignoreCase = true) || it.type.contains(searchQuery, ignoreCase = true) }
+                            }
+                            
+                            items(filteredFeatures) { feature ->
+                                Row(
+                                    Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { 
+                                        selectedFeature = feature 
+                                        showBackbone = false
+                                    },
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(Modifier.size(12.dp).background(if (feature.type == "enzyme") Color.Red else Color(feature.color), RoundedCornerShape(50)))
+                                    Spacer(Modifier.width(12.dp))
+                                    Text(feature.name, color = GenomicsText, modifier = Modifier.weight(1f))
+                                    Text("${feature.start}..${feature.end}", color = GenomicsMuted, fontSize = 12.sp)
+                                }
                             }
                         }
                     }

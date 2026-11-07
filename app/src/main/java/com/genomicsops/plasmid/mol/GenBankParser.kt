@@ -109,6 +109,7 @@ object GenBankParser {
             }
             
             features.sortBy { it.start }
+            features.sortBy { it.start }
             return Plasmid(name, seq, features)
         }
         return null

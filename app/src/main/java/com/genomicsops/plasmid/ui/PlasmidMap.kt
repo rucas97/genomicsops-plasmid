@@ -23,41 +23,45 @@ fun PlasmidMap(
     selectedFeature: Feature?,
     onFeatureSelected: (Feature?) -> Unit,
     onBackboneSelected: (Boolean) -> Unit,
-    colorTheme: String = "genomicsops"
+    colorTheme: String = "genomicsops",
+    showEnzymes: Boolean = true // NEW FEATURE
 ) {
     var rotation by remember { mutableStateOf(0f) }
     var scale by remember { mutableStateOf(1f) }
+
+    val currentRotation by rememberUpdatedState(rotation)
+    val currentScale by rememberUpdatedState(scale)
+    val currentShowEnzymes by rememberUpdatedState(showEnzymes)
 
     Canvas(
         modifier = modifier
             .fillMaxSize()
             .pointerInput(Unit) {
-                detectTransformGestures { _, pan, zoom, rotationChange ->
-                    scale = (scale * zoom).coerceIn(0.5f, 3f)
-                    rotation += rotationChange
-                    rotation += pan.x * 0.1f
-                }
-            }
-            .pointerInput(plasmid, rotation, scale) {
                 detectTapGestures { offset ->
                     val center = Offset(size.width / 2f, size.height / 2f)
                     val minDim = min(size.width, size.height).toFloat()
-                    val baseRadius = (minDim / 2f) * 0.7f * scale
+                    val baseRadius = (minDim / 2f) * 0.7f * currentScale
                     
                     val dx = offset.x - center.x
                     val dy = offset.y - center.y
                     val dist = sqrt(dx*dx + dy*dy)
 
-                    if (dist > baseRadius * 0.7f && dist < baseRadius * 1.3f) {
-                        var angle = Math.toDegrees(atan2(dy, dx).toDouble()).toFloat()
-                        // FIX: Add 90 degrees to match the drawing offset
-                        angle = (angle - rotation + 90f + 360f) % 360f
+                    if (dist > baseRadius * 0.6f && dist < baseRadius * 1.4f) {
+                        var rawAngle = Math.toDegrees(atan2(dy, dx).toDouble()).toFloat()
+                        var angle = (rawAngle + 90f - currentRotation + 360f) % 360f
                         
                         val tappedFeature = plasmid.features.find { feature ->
+                            if (feature.type == "enzyme" && !currentShowEnzymes) return@find false
+                            
                             val startAngle = (feature.start.toFloat() / plasmid.length) * 360f
                             val sweepAngle = ((feature.end - feature.start).toFloat() / plasmid.length) * 360f
-                            // Add a tiny bit of padding to make enzymes easier to tap
-                            angle >= (startAngle - 1f) && angle <= (startAngle + sweepAngle + 1f)
+                            val padding = if (feature.type == "enzyme") 5f else 1f
+                            
+                            if (sweepAngle < 0) {
+                                angle >= (startAngle - padding) || angle <= (startAngle + sweepAngle + padding)
+                            } else {
+                                angle >= (startAngle - padding) && angle <= (startAngle + sweepAngle + padding)
+                            }
                         }
                         
                         if (tappedFeature != null) {
@@ -70,6 +74,13 @@ fun PlasmidMap(
                     }
                 }
             }
+            .pointerInput(Unit) {
+                detectTransformGestures { _, pan, zoom, rotationChange ->
+                    scale = (scale * zoom).coerceIn(0.5f, 3f)
+                    rotation += rotationChange
+                    rotation += pan.x * 0.1f
+                }
+            }
     ) {
         val center = Offset(size.width / 2, size.height / 2)
         val baseRadius = (size.minDimension / 2f) * 0.7f * scale
@@ -80,6 +91,8 @@ fun PlasmidMap(
 
         rotate(rotation, center) {
             plasmid.features.forEach { feature ->
+                if (feature.type == "enzyme" && !showEnzymes) return@forEach
+
                 val startAngle = (feature.start.toFloat() / plasmid.length) * 360f - 90f
                 val sweepAngle = ((feature.end - feature.start).toFloat() / plasmid.length) * 360f
                 
@@ -94,22 +107,20 @@ fun PlasmidMap(
                 val radius = if (isSelected) baseRadius * 1.15f else baseRadius
                 val alpha = if (selectedFeature == null || isSelected) 1f else 0.3f
 
-                // FIX: Draw enzymes as radial lines so they are visible
                 if (feature.type == "enzyme") {
                     val radAngle = Math.toRadians((startAngle + 90f).toDouble())
-                    val x1 = center.x + (radius - strokeWidth) * cos(radAngle).toFloat()
-                    val y1 = center.y + (radius - strokeWidth) * sin(radAngle).toFloat()
-                    val x2 = center.x + (radius + strokeWidth) * cos(radAngle).toFloat()
-                    val y2 = center.y + (radius + strokeWidth) * sin(radAngle).toFloat()
+                    val x1 = center.x + (radius - strokeWidth * 1.5f) * cos(radAngle).toFloat()
+                    val y1 = center.y + (radius - strokeWidth * 1.5f) * sin(radAngle).toFloat()
+                    val x2 = center.x + (radius + strokeWidth * 1.5f) * cos(radAngle).toFloat()
+                    val y2 = center.y + (radius + strokeWidth * 1.5f) * sin(radAngle).toFloat()
                     
                     drawLine(
-                        color = Color(featureColor).copy(alpha = alpha),
+                        color = Color.Red.copy(alpha = alpha),
                         start = Offset(x1, y1),
                         end = Offset(x2, y2),
-                        strokeWidth = if (isSelected) 6f else 3f
+                        strokeWidth = if (isSelected) 8f else 4f
                     )
                 } else {
-                    // Draw normal features as arcs
                     val width = if (isSelected) strokeWidth * 1.5f else strokeWidth
                     drawArc(
                         color = Color(featureColor).copy(alpha = alpha),
