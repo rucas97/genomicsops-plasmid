@@ -50,12 +50,14 @@ fun PlasmidMap(
 
                     if (dist > baseRadius * 0.7f && dist < baseRadius * 1.3f) {
                         var angle = Math.toDegrees(atan2(dy, dx).toDouble()).toFloat()
-                        angle = (angle - rotation + 360f) % 360f
+                        // FIX: Add 90 degrees to match the drawing offset
+                        angle = (angle - rotation + 90f + 360f) % 360f
                         
                         val tappedFeature = plasmid.features.find { feature ->
                             val startAngle = (feature.start.toFloat() / plasmid.length) * 360f
                             val sweepAngle = ((feature.end - feature.start).toFloat() / plasmid.length) * 360f
-                            angle >= startAngle && angle <= (startAngle + sweepAngle)
+                            // Add a tiny bit of padding to make enzymes easier to tap
+                            angle >= (startAngle - 1f) && angle <= (startAngle + sweepAngle + 1f)
                         }
                         
                         if (tappedFeature != null) {
@@ -81,7 +83,6 @@ fun PlasmidMap(
                 val startAngle = (feature.start.toFloat() / plasmid.length) * 360f - 90f
                 val sweepAngle = ((feature.end - feature.start).toFloat() / plasmid.length) * 360f
                 
-                // Dynamic Color Themes
                 val featureColor = when(colorTheme) {
                     "rainbow" -> android.graphics.Color.HSVToColor(floatArrayOf((plasmid.features.indexOf(feature).toFloat() / plasmid.features.size.coerceAtLeast(1)) * 360f, 1f, 1f))
                     "pastel" -> android.graphics.Color.HSVToColor(floatArrayOf((plasmid.features.indexOf(feature).toFloat() / plasmid.features.size.coerceAtLeast(1)) * 360f, 0.4f, 1f))
@@ -91,24 +92,41 @@ fun PlasmidMap(
                 
                 val isSelected = feature == selectedFeature
                 val radius = if (isSelected) baseRadius * 1.15f else baseRadius
-                val width = if (isSelected) strokeWidth * 1.5f else strokeWidth
                 val alpha = if (selectedFeature == null || isSelected) 1f else 0.3f
 
-                drawArc(
-                    color = Color(featureColor).copy(alpha = alpha),
-                    startAngle = startAngle,
-                    sweepAngle = sweepAngle,
-                    useCenter = false,
-                    topLeft = Offset(center.x - radius, center.y - radius),
-                    size = Size(radius * 2, radius * 2),
-                    style = Stroke(width = width)
-                )
+                // FIX: Draw enzymes as radial lines so they are visible
+                if (feature.type == "enzyme") {
+                    val radAngle = Math.toRadians((startAngle + 90f).toDouble())
+                    val x1 = center.x + (radius - strokeWidth) * cos(radAngle).toFloat()
+                    val y1 = center.y + (radius - strokeWidth) * sin(radAngle).toFloat()
+                    val x2 = center.x + (radius + strokeWidth) * cos(radAngle).toFloat()
+                    val y2 = center.y + (radius + strokeWidth) * sin(radAngle).toFloat()
+                    
+                    drawLine(
+                        color = Color(featureColor).copy(alpha = alpha),
+                        start = Offset(x1, y1),
+                        end = Offset(x2, y2),
+                        strokeWidth = if (isSelected) 6f else 3f
+                    )
+                } else {
+                    // Draw normal features as arcs
+                    val width = if (isSelected) strokeWidth * 1.5f else strokeWidth
+                    drawArc(
+                        color = Color(featureColor).copy(alpha = alpha),
+                        startAngle = startAngle,
+                        sweepAngle = sweepAngle,
+                        useCenter = false,
+                        topLeft = Offset(center.x - radius, center.y - radius),
+                        size = Size(radius * 2, radius * 2),
+                        style = Stroke(width = width)
+                    )
 
-                if (feature.type == "CDS" || feature.type == "gene") {
-                    val endAngleRad = Math.toRadians((startAngle + sweepAngle).toDouble())
-                    val arrowX = center.x + radius * cos(endAngleRad).toFloat()
-                    val arrowY = center.y + radius * sin(endAngleRad).toFloat()
-                    drawCircle(color = Color(featureColor).copy(alpha = alpha), radius = width / 1.5f, center = Offset(arrowX, arrowY))
+                    if (feature.type == "CDS" || feature.type == "gene") {
+                        val endAngleRad = Math.toRadians((startAngle + sweepAngle).toDouble())
+                        val arrowX = center.x + radius * cos(endAngleRad).toFloat()
+                        val arrowY = center.y + radius * sin(endAngleRad).toFloat()
+                        drawCircle(color = Color(featureColor).copy(alpha = alpha), radius = width / 1.5f, center = Offset(arrowX, arrowY))
+                    }
                 }
             }
         }
