@@ -50,7 +50,9 @@ fun PlasmidMap(
                         var rawAngle = Math.toDegrees(atan2(dy, dx).toDouble()).toFloat()
                         var angle = (rawAngle + 90f - currentRotation + 360f) % 360f
                         
-                        val tappedFeature = plasmid.features.find { feature ->
+                        val tappedFeature = plasmid.features
+                            .filter { it.type != "source" } // Ignore full-plasmid source feature
+                            .find { feature ->
                             if (feature.type == "enzyme" && !currentShowEnzymes) return@find false
                             
                             val startAngle = (feature.start.toFloat() / plasmid.length) * 360f
@@ -91,6 +93,7 @@ fun PlasmidMap(
 
         rotate(rotation, center) {
             plasmid.features.forEach { feature ->
+                if (feature.type == "source") return@forEach // Don't draw source
                 if (feature.type == "enzyme" && !showEnzymes) return@forEach
 
                 val startAngle = (feature.start.toFloat() / plasmid.length) * 360f - 90f
