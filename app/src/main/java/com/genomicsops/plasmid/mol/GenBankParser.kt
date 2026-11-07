@@ -87,9 +87,26 @@ object GenBankParser {
             }
         }
 
-        return if (sequenceBuilder.isNotEmpty()) {
-            Plasmid(name, sequenceBuilder.toString().uppercase(), features)
-        } else null
+        if (sequenceBuilder.isNotEmpty()) {
+            val seq = sequenceBuilder.toString().uppercase()
+            
+            // NEW FEATURE: Scan for Restriction Enzymes
+            val enzymes = mapOf(
+                "EcoRI" to "GAATTC", "BamHI" to "GGATCC", "HindIII" to "AAGCTT",
+                "NotI" to "GCGGCCGC", "XbaI" to "TCTAGA", "SalI" to "GTCGAC", "PstI" to "CTGCAG"
+            )
+            
+            enzymes.forEach { (enzymeName, motif) ->
+                var index = seq.indexOf(motif)
+                while (index >= 0) {
+                    features.add(Feature(enzymeName, "enzyme", index + 1, index + motif.length, "+", 0xFFFF0000.toInt()))
+                    index = seq.indexOf(motif, index + 1)
+                }
+            }
+            
+            return Plasmid(name, seq, features)
+        }
+        return null
     }
 
     private fun parseLocation(loc: String): Triple<Int, Int, String> {

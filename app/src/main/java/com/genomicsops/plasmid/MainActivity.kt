@@ -156,7 +156,35 @@ fun PlasmidScreen() {
                 modifier = Modifier.fillMaxWidth().height(200.dp),
                 shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
             ) {
-                if (selectedFeature != null) {
+                if (showBackbone) {
+                    // FULL PLASMID DETAILS
+                    Column(Modifier.fillMaxSize().padding(16.dp)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text(p.name, color = GenomicsCyan, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                            IconButton(onClick = { 
+                                clipboardManager.setText(AnnotatedString(p.sequence))
+                                android.widget.Toast.makeText(context, "Full sequence copied!", android.widget.Toast.LENGTH_SHORT).show()
+                            }) {
+                                Icon(Icons.Default.ContentCopy, contentDescription = "Copy Full Sequence", tint = GenomicsTeal)
+                            }
+                        }
+                        Text("Total length: ${p.length} bp • GC Content: ${String.format("%.1f", p.gcContent)}%", color = GenomicsMuted, fontSize = 12.sp)
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            text = p.sequence.take(200) + "...",
+                            color = GenomicsText,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontSize = 12.sp,
+                            maxLines = 4,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            modifier = Modifier.background(GenomicsDark, RoundedCornerShape(8.dp)).padding(12.dp).fillMaxWidth()
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        TextButton(onClick = { showBackbone = false }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                            Text("Back to List", color = GenomicsMuted)
+                        }
+                    }
+                } else if (selectedFeature != null) {
                     // DETAILS VIEW
                     val feature = selectedFeature!!
                     val clipboardManager = LocalClipboardManager.current

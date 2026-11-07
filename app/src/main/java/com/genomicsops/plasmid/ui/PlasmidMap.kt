@@ -55,10 +55,17 @@ fun PlasmidMap(
                         val tappedFeature = plasmid.features.find { feature ->
                             val startAngle = (feature.start.toFloat() / plasmid.length) * 360f
                             val sweepAngle = ((feature.end - feature.start).toFloat() / plasmid.length) * 360f
-                            // Check if angle is within this feature's sweep
                             angle >= startAngle && angle <= (startAngle + sweepAngle)
                         }
-                        onFeatureSelected(tappedFeature)
+                        
+                        if (tappedFeature != null) {
+                            onFeatureSelected(tappedFeature)
+                            onBackboneSelected(false)
+                        } else {
+                            // They tapped the ring, but not on a feature. This is the backbone!
+                            onFeatureSelected(null)
+                            onBackboneSelected(true)
+                        }
                     } else {
                         onFeatureSelected(null) // Tapped empty space
                     }
