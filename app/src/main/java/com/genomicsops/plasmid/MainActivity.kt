@@ -3,6 +3,7 @@ package com.genomicsops.plasmid
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -16,16 +17,20 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.genomicsops.plasmid.mol.Feature
@@ -70,8 +75,12 @@ fun getFileName(context: android.content.Context, uri: Uri): String? {
 fun PlasmidScreen() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val clipboardManager = LocalClipboardManager.current
+    
     var plasmid by remember { mutableStateOf<Plasmid?>(null) }
     var selectedFeature by remember { mutableStateOf<Feature?>(null) }
+    var showBackbone by remember { mutableStateOf(false) }
+    var colorTheme by remember { mutableStateOf("genomicsops") }
     var isLoading by remember { mutableStateOf(false) }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -124,110 +133,115 @@ fun PlasmidScreen() {
                         Text(p.name, color = GenomicsText, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                         Text("${p.length} bp • ${p.features.size} features", color = GenomicsMuted, fontSize = 12.sp)
                     }
-                    TextButton(onClick = { plasmid = null; selectedFeature = null }) {
-                        Text("Close", color = GenomicsCyan)
-                    }
-                }
-            }
-
-            // 3D Map
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                PlasmidMap(plasmid = p, selectedFeature = selectedFeature, onFeatureSelected = { selectedFeature = it })
-                
-                // Show feature name if selected
-                if (selectedFeature != null) {
-                    Surface(
-                        modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
-                        color = GenomicsSurface.copy(alpha = 0.9f),
-                        shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(1.dp, Color(selectedFeature!!.color))
-                    ) {
-                        Column(Modifier.padding(12.dp)) {
-                            Text(selectedFeature!!.name, color = Color(selectedFeature!!.color), fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            Text("Type: ${selectedFeature!!.type} • ${selectedFeature!!.start}..${selectedFeature!!.end}", color = GenomicsText, fontSize = 12.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { 
+                            clipboardManager.setText(AnnotatedString(p.sequence))
+                            Toast.makeText(context, "Full sequence copied!", Toast.LENGTH_SHORT).show()
+                        }) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = "Copy All", tint = GenomicsTeal)
+                        }
+                        IconButton(onClick = { 
+                            colorTheme = when(colorTheme) {
+                                "genomicsops" -> "rainbow"
+                                "rainbow" -> "pastel"
+                                "pastel" -> "mono"
+                                else -> "genomicsops"
+                            }
+                        }) {
+                            Icon(Icons.Default.Palette, contentDescription = "Colors", tint = GenomicsCyan)
+                        }
+                        TextButton(onClick = { plasmid = null; selectedFeature = null; showBackbone = false }) {
+                            Text("Close", color = GenomicsMuted)
                         }
                     }
                 }
             }
+            // 3D Map
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                PlasmidMap(
+                    plasmid = p, 
+                    selectedFeature = selectedFeature, 
+                    onFeatureSelected = { selectedFeature = it }, 
+                    onBackboneSelected = { showBackbone = it }, 
+                    colorTheme = colorTheme
+                )
+            }
 
-            // Feature Details & List
+            // Bottom Details / List Panel
             Surface(
                 color = GenomicsSurface,
-                modifier = Modifier.fillMaxWidth().height(200.dp),
+                modifier = Modifier.fillMaxWidth().height(220.dp),
                 shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
             ) {
                 if (showBackbone) {
-                    // FULL PLASMID DETAILS
+                    // --- FULL PLASMID BACKBONE DETAILS ---
                     Column(Modifier.fillMaxSize().padding(16.dp)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Text(p.name, color = GenomicsCyan, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                             IconButton(onClick = { 
                                 clipboardManager.setText(AnnotatedString(p.sequence))
-                                android.widget.Toast.makeText(context, "Full sequence copied!", android.widget.Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Full sequence copied!", Toast.LENGTH_SHORT).show()
                             }) {
-                                Icon(Icons.Default.ContentCopy, contentDescription = "Copy Full Sequence", tint = GenomicsTeal)
+                                Icon(Icons.Default.ContentCopy, contentDescription = "Copy Full", tint = GenomicsTeal)
                             }
                         }
                         Text("Total length: ${p.length} bp • GC Content: ${String.format("%.1f", p.gcContent)}%", color = GenomicsMuted, fontSize = 12.sp)
-                        Spacer(Modifier.height(16.dp))
+                        Spacer(Modifier.height(12.dp))
                         Text(
-                            text = p.sequence.take(200) + "...",
+                            text = p.sequence,
                             color = GenomicsText,
-                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontFamily = FontFamily.Monospace,
                             fontSize = 12.sp,
-                            maxLines = 4,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.background(GenomicsDark, RoundedCornerShape(8.dp)).padding(12.dp).fillMaxWidth()
                         )
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.weight(1f))
                         TextButton(onClick = { showBackbone = false }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                            Text("Back to List", color = GenomicsMuted)
+                            Text("Back to Feature List", color = GenomicsMuted)
                         }
                     }
                 } else if (selectedFeature != null) {
-                    // DETAILS VIEW
+                    // --- FEATURE DETAILS ---
                     val feature = selectedFeature!!
-                    val clipboardManager = LocalClipboardManager.current
+                    val featureSeq = p.sequence.substring((feature.start - 1).coerceAtLeast(0), feature.end.coerceAtMost(p.length))
                     
                     Column(Modifier.fillMaxSize().padding(16.dp)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Text(feature.name, color = Color(feature.color), fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                            TextButton(onClick = { selectedFeature = null }) {
-                                Text("Back to List", color = GenomicsCyan, fontSize = 12.sp)
+                            Row {
+                                IconButton(onClick = { 
+                                    clipboardManager.setText(AnnotatedString(featureSeq))
+                                    Toast.makeText(context, "Feature sequence copied!", Toast.LENGTH_SHORT).show()
+                                }) {
+                                    Icon(Icons.Default.ContentCopy, contentDescription = "Copy Feature", tint = GenomicsTeal)
+                                }
+                                TextButton(onClick = { selectedFeature = null }) {
+                                    Text("Close", color = GenomicsMuted, fontSize = 12.sp)
+                                }
                             }
                         }
                         Text("${feature.type} • Strand ${feature.strand} • ${feature.start}..${feature.end}", color = GenomicsMuted, fontSize = 12.sp)
-                        Spacer(Modifier.height(16.dp))
-                        
-                        val featureSeq = p.sequence.substring((feature.start - 1).coerceAtLeast(0), feature.end.coerceAtMost(p.length))
+                        Spacer(Modifier.height(12.dp))
                         Text(
                             text = featureSeq,
                             color = GenomicsText,
-                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontFamily = FontFamily.Monospace,
                             fontSize = 12.sp,
                             maxLines = 3,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                            modifier = Modifier.background(GenomicsDark, RoundedCornerShape(4.dp)).padding(8.dp)
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.background(GenomicsDark, RoundedCornerShape(8.dp)).padding(12.dp).fillMaxWidth()
                         )
-                        
-                        Spacer(Modifier.height(12.dp))
-                        Button(
-                            onClick = { 
-                                clipboardManager.setText(AnnotatedString(featureSeq))
-                                android.widget.Toast.makeText(context, "Sequence copied!", android.widget.Toast.LENGTH_SHORT).show()
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(containerColor = GenomicsCyan)
-                        ) {
-                            Text("Copy DNA Sequence", color = GenomicsDark, fontWeight = FontWeight.Bold)
-                        }
                     }
                 } else {
-                    // LIST VIEW
+                    // --- FEATURE LIST ---
                     LazyColumn(contentPadding = PaddingValues(16.dp)) {
                         items(p.features) { feature ->
                             Row(
-                                Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { selectedFeature = feature },
+                                Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { 
+                                    selectedFeature = feature 
+                                    showBackbone = false
+                                },
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Box(Modifier.size(12.dp).background(Color(feature.color), RoundedCornerShape(50)))
