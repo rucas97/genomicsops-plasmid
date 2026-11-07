@@ -39,7 +39,8 @@ fun PlasmidMap(
             .pointerInput(plasmid, rotation, scale) {
                 detectTapGestures { offset ->
                     val center = Offset(size.width / 2f, size.height / 2f)
-                    val baseRadius = (size.minDimension / 2f) * 0.7f * scale
+                    val minDim = min(size.width, size.height).toFloat()
+                    val baseRadius = (minDim / 2f) * 0.7f * scale
                     
                     val dx = offset.x - center.x
                     val dy = offset.y - center.y
@@ -65,7 +66,8 @@ fun PlasmidMap(
             }
     ) {
         val center = Offset(size.width / 2, size.height / 2)
-        val baseRadius = (size.minDimension / 2f) * 0.7f * scale
+        val minDim = min(size.width, size.height).toFloat()
+                    val baseRadius = (minDim / 2f) * 0.7f * scale
         val strokeWidth = baseRadius * 0.08f
 
         // 1. Draw Backbone
