@@ -17,6 +17,13 @@ data class Plasmid(
     val features: List<Feature>
 ) {
     val length: Int get() = sequence.length
+    
+    // NEW: GC Content calculation
+    val gcContent: Float get() {
+        if (sequence.isEmpty()) return 0f
+        val gcCount = sequence.count { it == 'G' || it == 'C' }
+        return (gcCount.toFloat() / sequence.length) * 100f
+    }
 }
 
 object GenBankParser {
@@ -49,7 +56,6 @@ object GenBankParser {
                 inFeatures = false
                 inOrigin = true
             } else if (inFeatures) {
-                // A new feature key starts at column 6 (index 5) and is not a space
                 if (line.length > 20 && line[5] != ' ') {
                     if (currentFeatureType.isNotEmpty() && currentLocation.isNotEmpty()) {
                         val (start, end, strand) = parseLocation(currentLocation)
@@ -69,7 +75,6 @@ object GenBankParser {
                     } else if (trimmed.startsWith("/product=") && currentName.isEmpty()) {
                         currentName = trimmed.substringAfter("=").replace("\"", "")
                     } else if (!trimmed.startsWith("/")) {
-                        // Continuation of location string (e.g. join spanning lines)
                         currentLocation += trimmed
                     }
                 }
@@ -79,7 +84,6 @@ object GenBankParser {
             }
         }
         
-        // Add the very last feature
         if (currentFeatureType.isNotEmpty() && currentLocation.isNotEmpty()) {
             val (start, end, strand) = parseLocation(currentLocation)
             if (start > 0 && end >= start) {
@@ -90,7 +94,7 @@ object GenBankParser {
         if (sequenceBuilder.isNotEmpty()) {
             val seq = sequenceBuilder.toString().uppercase()
             
-            // NEW FEATURE: Scan for Restriction Enzymes
+            // NEW: Restriction Enzyme Scanning
             val enzymes = mapOf(
                 "EcoRI" to "GAATTC", "BamHI" to "GGATCC", "HindIII" to "AAGCTT",
                 "NotI" to "GCGGCCGC", "XbaI" to "TCTAGA", "SalI" to "GTCGAC", "PstI" to "CTGCAG"
@@ -112,11 +116,8 @@ object GenBankParser {
     private fun parseLocation(loc: String): Triple<Int, Int, String> {
         val isComplement = loc.contains("complement")
         val strand = if (isComplement) "-" else "+"
-        
-        // Extract all numbers, ignoring non-digits and dots
         val numbers = loc.filter { it.isDigit() || it == '.' }.split("..")
         val validNums = numbers.mapNotNull { it.toIntOrNull() }
-        
         return if (validNums.size >= 2) {
             Triple(validNums.first(), validNums.last(), strand)
         } else {
