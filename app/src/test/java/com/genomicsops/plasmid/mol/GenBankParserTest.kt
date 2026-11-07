@@ -39,7 +39,7 @@ ORIGIN
         val plasmid = GenBankParser.parse(inputStream)
         
         assertNotNull(plasmid)
-        assertEquals(2, plasmid?.features?.size)
+        assertEquals(3, plasmid?.features?.size)
         
         val ampR = plasmid?.features?.find { it.name == "AmpR" }
         assertNotNull(ampR)
