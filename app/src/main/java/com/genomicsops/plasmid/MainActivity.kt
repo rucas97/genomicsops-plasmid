@@ -9,6 +9,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -22,6 +23,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -147,22 +150,63 @@ fun PlasmidScreen() {
                 }
             }
 
-            // Feature List
+            // Feature Details & List
             Surface(
                 color = GenomicsSurface,
-                modifier = Modifier.fillMaxWidth().height(150.dp),
+                modifier = Modifier.fillMaxWidth().height(200.dp),
                 shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
             ) {
-                LazyColumn(contentPadding = PaddingValues(16.dp)) {
-                    items(p.features) { feature ->
-                        Row(
-                            Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                if (selectedFeature != null) {
+                    // DETAILS VIEW
+                    val feature = selectedFeature!!
+                    val clipboardManager = LocalClipboardManager.current
+                    
+                    Column(Modifier.fillMaxSize().padding(16.dp)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text(feature.name, color = Color(feature.color), fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                            TextButton(onClick = { selectedFeature = null }) {
+                                Text("Back to List", color = GenomicsCyan, fontSize = 12.sp)
+                            }
+                        }
+                        Text("${feature.type} • Strand ${feature.strand} • ${feature.start}..${feature.end}", color = GenomicsMuted, fontSize = 12.sp)
+                        Spacer(Modifier.height(16.dp))
+                        
+                        val featureSeq = p.sequence.substring((feature.start - 1).coerceAtLeast(0), feature.end.coerceAtMost(p.length))
+                        Text(
+                            text = featureSeq,
+                            color = GenomicsText,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontSize = 12.sp,
+                            maxLines = 3,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            modifier = Modifier.background(GenomicsDark, RoundedCornerShape(4.dp)).padding(8.dp)
+                        )
+                        
+                        Spacer(Modifier.height(12.dp))
+                        Button(
+                            onClick = { 
+                                clipboardManager.setText(AnnotatedString(featureSeq))
+                                android.widget.Toast.makeText(context, "Sequence copied!", android.widget.Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = GenomicsCyan)
                         ) {
-                            Box(Modifier.size(12.dp).background(Color(feature.color), RoundedCornerShape(50)))
-                            Spacer(Modifier.width(12.dp))
-                            Text(feature.name, color = GenomicsText, modifier = Modifier.weight(1f))
-                            Text("${feature.start}..${feature.end}", color = GenomicsMuted, fontSize = 12.sp)
+                            Text("Copy DNA Sequence", color = GenomicsDark, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                } else {
+                    // LIST VIEW
+                    LazyColumn(contentPadding = PaddingValues(16.dp)) {
+                        items(p.features) { feature ->
+                            Row(
+                                Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { selectedFeature = feature },
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(Modifier.size(12.dp).background(Color(feature.color), RoundedCornerShape(50)))
+                                Spacer(Modifier.width(12.dp))
+                                Text(feature.name, color = GenomicsText, modifier = Modifier.weight(1f))
+                                Text("${feature.start}..${feature.end}", color = GenomicsMuted, fontSize = 12.sp)
+                            }
                         }
                     }
                 }

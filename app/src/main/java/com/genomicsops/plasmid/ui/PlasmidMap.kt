@@ -1,6 +1,7 @@
 package com.genomicsops.plasmid.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
@@ -11,16 +12,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.pointer.pointerInput
+import com.genomicsops.plasmid.mol.Feature
 import com.genomicsops.plasmid.mol.Plasmid
-import kotlin.math.cos
-import kotlin.math.sin
+import kotlin.math.*
 
 @Composable
 fun PlasmidMap(
     plasmid: Plasmid,
     modifier: Modifier = Modifier,
-    selectedFeature: com.genomicsops.plasmid.mol.Feature?,
-    onFeatureSelected: (com.genomicsops.plasmid.mol.Feature?) -> Unit
+    selectedFeature: Feature?,
+    onFeatureSelected: (Feature?) -> Unit
 ) {
     var rotation by remember { mutableStateOf(0f) }
     var scale by remember { mutableStateOf(1f) }
@@ -30,9 +31,36 @@ fun PlasmidMap(
             .fillMaxSize()
             .pointerInput(Unit) {
                 detectTransformGestures { _, pan, zoom, rotationChange ->
-                    scale *= zoom
+                    scale = (scale * zoom).coerceIn(0.5f, 3f)
                     rotation += rotationChange
                     rotation += pan.x * 0.1f
+                }
+            }
+            .pointerInput(plasmid, rotation, scale) {
+                detectTapGestures { offset ->
+                    val center = Offset(size.width / 2f, size.height / 2f)
+                    val baseRadius = (size.minDimension / 2f) * 0.7f * scale
+                    
+                    val dx = offset.x - center.x
+                    val dy = offset.y - center.y
+                    val dist = sqrt(dx*dx + dy*dy)
+
+                    // If tap is near the circle
+                    if (dist > baseRadius * 0.7f && dist < baseRadius * 1.3f) {
+                        var angle = Math.toDegrees(atan2(dy, dx).toDouble()).toFloat()
+                        angle = (angle - rotation + 360f) % 360f
+                        
+                        // Find which feature is at this angle
+                        val tappedFeature = plasmid.features.find { feature ->
+                            val startAngle = (feature.start.toFloat() / plasmid.length) * 360f
+                            val sweepAngle = ((feature.end - feature.start).toFloat() / plasmid.length) * 360f
+                            // Check if angle is within this feature's sweep
+                            angle >= startAngle && angle <= (startAngle + sweepAngle)
+                        }
+                        onFeatureSelected(tappedFeature)
+                    } else {
+                        onFeatureSelected(null) // Tapped empty space
+                    }
                 }
             }
     ) {
